@@ -92,6 +92,10 @@ WSSHClient.prototype.connect = function(options) {
     this._connection.onclose = function(evt) {
         options.onClose();
     };
+    
+    this._connection.onerror = function(evt) {
+        options.onError(evt);
+    }
 };
 
 WSSHClient.prototype.send = function(data) {
