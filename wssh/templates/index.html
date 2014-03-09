@@ -107,6 +107,19 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="control-group" id="save_data">
+                        <label class="control-label">
+                            Remember entered data
+                        </label>
+                        <div class="controls">
+                            <input type="checkbox" id="save_data_checkbox"
+                                class="input-large" />
+                            <p class="help-block">
+                                Check this if you want to store your settings in cookies.
+                            </p>
+                        </div>
+                    </div>
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">
@@ -127,6 +140,8 @@
         <script type="application/javascript" src="{{url_for('static', filename='term.js')}}">
         </script>
         <script type="application/javascript" src="{{url_for('static', filename='wssh.js')}}">
+        </script>
+        <script type="application/javascript" src="{{url_for('static', filename='jquery.cookie.js')}}">
         </script>
         <script type="application/javascript">
             function openTerminal(options) {
@@ -158,6 +173,8 @@
 
         <script type='application/javascript'>
             $(document).ready(function() {
+                $.cookie.defaults.secure = true;
+
                 $('#ssh').hide();
                 $('#private_key_authentication', '#connect').hide();
 
@@ -174,6 +191,39 @@
                         $('#private_key_authentication').hide();
                     }
                 );
+                
+                var save_params = $.cookie('save_params') || false;
+                
+                $('#save_data_checkbox').attr('checked', save_params);
+
+                if (save_params) {
+                    // restore data
+                    var auth_type = $.cookie('auth_type') || 'password';
+                    if (auth_type == 'password') {
+                        //var authentication = $('input[name=authentication_method]', '#connect');
+                        //authentication.
+                        $('#password_authentication').show();
+                        $('#private_key_authentication').hide();
+                        $('input[name=authentication_method][value=password]').attr('checked', true);
+                        $('input[name=authentication_method][value=private_key]').attr('checked', false);
+                    } else {
+                        $('#password_authentication').hide();
+                        $('#private_key_authentication').show();
+                        $('input[name=authentication_method][value=password]').attr('checked', false);
+                        $('input[name=authentication_method][value=private_key]').attr('checked', true);
+                        
+                        var private_key = $.cookie('private_key') || ''
+                        $('textarea#private_key').val(private_key);
+                    }
+                    
+                    var portnumber = $.cookie('portnumber');
+                    var username = $.cookie('username');
+                    var hostname = $.cookie('hostname');
+
+                    $('input:text#username').val(username);
+                    $('input:text#hostname').val(hostname);
+                    $('input:text#portnumber').val(portnumber);
+                }
 
                 $('#connect').submit(function(ev) {
                     ev.preventDefault();
@@ -212,6 +262,25 @@
                     } else {
                         $.extend(options, {port: 22});
                     }
+                    
+                    save_params = $('#save_data_checkbox').attr('checked') == 'checked';
+
+                    $.cookie('save_params', save_params);
+
+                    if (save_params) {
+                        $.cookie('username', username.val());
+                        $.cookie('hostname', hostname.val());
+                        $.cookie('portnumber', portnumber.val());
+                        $.cookie('auth_type', authentication);
+                        $.removeCookie('private_key');
+                    } else {
+                        $.removeCookie('save_params');
+                        $.removeCookie('username');
+                        $.removeCookie('hostname');
+                        $.removeCookie('portnumber');
+                        $.removeCookie('auth_type');
+                        $.removeCookie('private_key');
+                    }
 
                     if (authentication == 'password') {
                         var password = $('input:password#password');
@@ -220,8 +289,14 @@
                         $.extend(options, {password: password.val()});
                     } else if (authentication == 'private_key') {
                         var private_key = $('textarea#private_key');
+
                         if (!validate([username, hostname, private_key]))
                             return false;
+
+                        if (save_params) {
+                            $.cookie('private_key', $('textarea#private_key').val());
+                        }
+
                         $.extend(options, {private_key: private_key.val()});
                         var key_passphrase = $('input:password#key_passphrase');
                         if (key_passphrase.val()) {
