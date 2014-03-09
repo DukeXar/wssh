@@ -18,6 +18,7 @@ from paramiko.rsakey import RSAKey
 from paramiko.ssh_exception import SSHException
 
 import socket
+import sys
 
 try:
     import simplejson as json
@@ -110,8 +111,11 @@ class WSSHBridge(object):
         try:
             while True:
                 data = self._websocket.receive()
-                if not data:
+                if data is None:
+                    print >>sys.stderr, "Inbound socket: no data"
                     return
+                if not data:
+                    continue
                 data = json.loads(str(data))
                 if 'resize' in data:
                     channel.resize_pty(
@@ -119,19 +123,33 @@ class WSSHBridge(object):
                         data['resize'].get('height', 24))
                 if 'data' in data:
                     channel.send(data['data'])
+            print >>sys.stderr, "Inbound socket was closed"
+        except Exception as e:
+            print >>sys.stderr, "Error occurred: %s", str(e)
         finally:
+            print >>sys.stderr, "Inbound socket was closed"
             self.close()
 
     def _forward_outbound(self, channel):
         """ Forward outbound traffic (ssh -> websockets) """
         try:
             while True:
-                wait_read(channel.fileno())
+                try:
+                    wait_read(channel.fileno(), timeout=25)
+                except socket.timeout, e:
+                    #print >>sys.stderr, "Timeout waiting input data - pinging"
+                    self._websocket.send(json.dumps({'data': ''}))
+                    continue
+
                 data = channel.recv(1024)
                 if not len(data):
+                    print >>sys.stderr, "Outbound socket was closed"
                     return
                 self._websocket.send(json.dumps({'data': data}))
+        except Exception as e:
+            print >>sys.stderr, "Error occurred (outbound): %s", str(e)
         finally:
+            print >>sys.stderr, "Outbound socket was closed (2)"
             self.close()
 
     def _bridge(self, channel):
